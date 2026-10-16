@@ -1,21 +1,22 @@
 package br.pucgoias.ads.hotel.dominio;
 
+import br.pucgoias.ads.hotel.excecao.PeriodoInvalidoException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 
 /**
  * Objeto de valor que representa o periodo de uma reserva.
- *
- * TODO (Etapa 2):
- *  - anotar a classe como incorporavel (@Embeddable);
- *  - mapear as colunas check_in e check_out como obrigatorias;
- *  - validar no construtor a regra R1 (PeriodoInvalidoException);
- *  - implementar noites() e sobrepoe(Periodo);
- *  - implementar equals e hashCode com base nas duas datas.
  */
+@Embeddable
 public class Periodo {
 
+    @Column(name = "check_in", nullable = false)
     private LocalDate checkIn;
 
+    @Column(name = "check_out", nullable = false)
     private LocalDate checkOut;
 
     /** Construtor exigido pela especificacao JPA. */
@@ -23,17 +24,19 @@ public class Periodo {
     }
 
     public Periodo(LocalDate checkIn, LocalDate checkOut) {
-        // TODO: validar a regra R1 antes de atribuir
+        if (checkIn == null || checkOut == null || !checkOut.isAfter(checkIn)) {
+            throw new PeriodoInvalidoException("check-out deve ser posterior ao check-in");
+        }
         this.checkIn = checkIn;
         this.checkOut = checkOut;
     }
 
     public long noites() {
-        throw new UnsupportedOperationException("TODO: implementar");
+        return ChronoUnit.DAYS.between(checkIn, checkOut);
     }
 
     public boolean sobrepoe(Periodo outro) {
-        throw new UnsupportedOperationException("TODO: implementar");
+        return checkIn.isBefore(outro.checkOut) && outro.checkIn.isBefore(checkOut);
     }
 
     public LocalDate getCheckIn() {
@@ -42,5 +45,22 @@ public class Periodo {
 
     public LocalDate getCheckOut() {
         return checkOut;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Periodo outro)) {
+            return false;
+        }
+        return Objects.equals(checkIn, outro.checkIn)
+                && Objects.equals(checkOut, outro.checkOut);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(checkIn, checkOut);
     }
 }
