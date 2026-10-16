@@ -8,6 +8,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
+import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 
@@ -30,7 +31,8 @@ public abstract class Quarto {
     @Column(name = "valor_diaria", nullable = false, precision = 10, scale = 2)
     private BigDecimal valorDiaria;
 
-    // TODO (Etapa 2): declarar o atributo de versao para a regra R8.
+    @Version
+    private Long versao;
 
     protected Quarto() {
     }
@@ -64,5 +66,9 @@ public abstract class Quarto {
 
     public BigDecimal getValorDiaria() {
         return valorDiaria;
+    }
+
+    public Long getVersao() {
+        return versao;
     }
 }
