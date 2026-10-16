@@ -12,6 +12,8 @@ import br.pucgoias.ads.hotel.repositorio.HospedeRepository;
 import br.pucgoias.ads.hotel.repositorio.QuartoRepository;
 import br.pucgoias.ads.hotel.repositorio.ReservaRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,25 +51,29 @@ public class ReservaService {
         return reservas.save(new Reserva(hospede, quarto, periodo));
     }
 
-    /** R4: TODO - localizar a reserva e cancela-la sem chamar save. */
+    /** R4: localiza a reserva e cancela sem chamar save (dirty checking). */
     @Transactional
     public void cancelar(Long reservaId) {
-        throw new UnsupportedOperationException("TODO: implementar");
+        Reserva reserva = reservas.findById(reservaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva", reservaId));
+        reserva.cancelar();
     }
 
-    /** R5: TODO - pagina solicitada, ordenada por periodo.checkIn decrescente. */
+    /** R5: pagina solicitada, ordenada por periodo.checkIn decrescente. */
     public Page<Reserva> listarPorHospede(Long hospedeId, int pagina, int tamanho) {
-        throw new UnsupportedOperationException("TODO: implementar");
+        PageRequest pageRequest = PageRequest.of(pagina, tamanho,
+                Sort.by("periodo.checkIn").descending());
+        return reservas.findByHospedeId(hospedeId, pageRequest);
     }
 
-    /** R6: TODO - somente reservas ATIVAS. */
+    /** R6: somente reservas ATIVAS. */
     public List<OcupacaoQuarto> relatorioOcupacao() {
-        throw new UnsupportedOperationException("TODO: implementar");
+        return reservas.relatorioOcupacao(StatusReserva.ATIVA);
     }
 
-    /** R7: TODO - reservas ATIVAS com hospede e quarto carregados. */
+    /** R7: reservas ATIVAS com hospede e quarto carregados. */
     public List<Reserva> listarAtivasComDetalhes() {
-        throw new UnsupportedOperationException("TODO: implementar");
+        return reservas.findByStatusOrderById(StatusReserva.ATIVA);
     }
 
     @Transactional
