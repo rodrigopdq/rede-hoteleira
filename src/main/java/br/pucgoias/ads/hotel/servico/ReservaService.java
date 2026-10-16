@@ -25,6 +25,8 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class ReservaService {
 
+    private static final Sort CHECK_IN_DECRESCENTE = Sort.by("periodo.checkIn").descending();
+
     private final HospedeRepository hospedes;
     private final QuartoRepository quartos;
     private final ReservaRepository reservas;
@@ -35,14 +37,11 @@ public class ReservaService {
         this.reservas = reservas;
     }
 
-    /** R1, R2 e R3: operacao fornecida como referencia. */
+    /** R1, R2 e R3. */
     @Transactional
     public Reserva reservar(Long hospedeId, Long quartoId, LocalDate checkIn, LocalDate checkOut) {
-        Hospede hospede = hospedes.findById(hospedeId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Hospede", hospedeId));
-        Quarto quarto = quartos.findById(quartoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Quarto", quartoId));
-
+        Hospede hospede = buscarHospede(hospedeId);
+        Quarto quarto = buscarQuarto(quartoId);
         Periodo periodo = new Periodo(checkIn, checkOut);
 
         if (reservas.existeConflito(quartoId, StatusReserva.ATIVA, checkIn, checkOut)) {
@@ -51,19 +50,15 @@ public class ReservaService {
         return reservas.save(new Reserva(hospede, quarto, periodo));
     }
 
-    /** R4: localiza a reserva e cancela sem chamar save (dirty checking). */
+    /** R4: cancela sem chamar save (dirty checking). */
     @Transactional
     public void cancelar(Long reservaId) {
-        Reserva reserva = reservas.findById(reservaId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva", reservaId));
-        reserva.cancelar();
+        buscarReserva(reservaId).cancelar();
     }
 
-    /** R5: pagina solicitada, ordenada por periodo.checkIn decrescente. */
+    /** R5: pagina solicitada, ordenada por check-in decrescente. */
     public Page<Reserva> listarPorHospede(Long hospedeId, int pagina, int tamanho) {
-        PageRequest pageRequest = PageRequest.of(pagina, tamanho,
-                Sort.by("periodo.checkIn").descending());
-        return reservas.findByHospedeId(hospedeId, pageRequest);
+        return reservas.findByHospedeId(hospedeId, PageRequest.of(pagina, tamanho, CHECK_IN_DECRESCENTE));
     }
 
     /** R6: somente reservas ATIVAS. */
@@ -76,11 +71,28 @@ public class ReservaService {
         return reservas.findByStatusOrderById(StatusReserva.ATIVA);
     }
 
+    /** R8: protegido pelo @Version do Quarto. */
     @Transactional
     public Quarto reajustarDiaria(Long quartoId, BigDecimal novoValor) {
-        Quarto quarto = quartos.findById(quartoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Quarto", quartoId));
+        Quarto quarto = buscarQuarto(quartoId);
         quarto.reajustarDiaria(novoValor);
         return quarto;
+    }
+
+    // --- Auxiliares ---------------------------------------------------------
+
+    private Hospede buscarHospede(Long id) {
+        return hospedes.findById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Hospede", id));
+    }
+
+    private Quarto buscarQuarto(Long id) {
+        return quartos.findById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Quarto", id));
+    }
+
+    private Reserva buscarReserva(Long id) {
+        return reservas.findById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Reserva", id));
     }
 }
