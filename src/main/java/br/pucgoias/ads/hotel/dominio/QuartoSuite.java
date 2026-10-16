@@ -1,15 +1,15 @@
 package br.pucgoias.ads.hotel.dominio;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorValue;
+import jakarta.persistence.Entity;
 import java.math.BigDecimal;
 
-/**
- * TODO (Etapa 2):
- *  - mapear como entidade da hierarquia com valor discriminador "SUITE";
- *  - mapear taxaServico (coluna taxa_servico);
- *  - implementar calcularValor conforme a regra R3.
- */
+@Entity
+@DiscriminatorValue("SUITE")
 public class QuartoSuite extends Quarto {
 
+    @Column(name = "taxa_servico", precision = 10, scale = 2)
     private BigDecimal taxaServico;
 
     protected QuartoSuite() {
@@ -22,7 +22,7 @@ public class QuartoSuite extends Quarto {
 
     @Override
     public BigDecimal calcularValor(Periodo periodo) {
-        throw new UnsupportedOperationException("TODO: implementar");
+        return valorDasDiarias(periodo).add(taxaServico);
     }
 
     public BigDecimal getTaxaServico() {
