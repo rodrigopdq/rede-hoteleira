@@ -1,22 +1,22 @@
 package br.pucgoias.ads.hotel.dominio;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * TODO (Etapa 2): completar o mapeamento.
- *  - hospede e quarto: muitos-para-um, carregamento LAZY, obrigatorios;
- *  - periodo: objeto incorporado;
- *  - status: enumeracao gravada como texto;
- *  - valorTotal: coluna valor_total, precisao 12, escala 2;
- *  - criadaEm: preenchida por callback antes do INSERT, nao atualizavel;
- *  - versao: controle de concorrencia otimista.
- */
 @Entity
 public class Reserva {
 
@@ -24,17 +24,29 @@ public class Reserva {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "hospede_id", nullable = false)
     private Hospede hospede;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "quarto_id", nullable = false)
     private Quarto quarto;
 
+    @Embedded
     private Periodo periodo;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 15)
     private StatusReserva status;
 
+    @Column(name = "valor_total", nullable = false, precision = 12, scale = 2)
     private BigDecimal valorTotal;
 
+    @Column(name = "criada_em", nullable = false, updatable = false)
     private LocalDateTime criadaEm;
+
+    @Version
+    private Long versao;
 
     protected Reserva() {
     }
@@ -47,11 +59,14 @@ public class Reserva {
         this.valorTotal = quarto.calcularValor(periodo);
     }
 
-    // TODO: metodo de callback que registra a data e hora de criacao
+    @PrePersist
+    void registrarCriacao() {
+        this.criadaEm = LocalDateTime.now();
+    }
 
     /** Regra R4: alterar apenas o estado do objeto. */
     public void cancelar() {
-        throw new UnsupportedOperationException("TODO: implementar");
+        this.status = StatusReserva.CANCELADA;
     }
 
     public Long getId() {
@@ -80,5 +95,9 @@ public class Reserva {
 
     public LocalDateTime getCriadaEm() {
         return criadaEm;
+    }
+
+    public Long getVersao() {
+        return versao;
     }
 }
