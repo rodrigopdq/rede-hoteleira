@@ -5,9 +5,14 @@ import br.pucgoias.ads.hotel.dominio.Quarto;
 import br.pucgoias.ads.hotel.dominio.QuartoStandard;
 import br.pucgoias.ads.hotel.dominio.QuartoSuite;
 import br.pucgoias.ads.hotel.dominio.Reserva;
+import br.pucgoias.ads.hotel.dominio.StatusReserva;
+import br.pucgoias.ads.hotel.dto.OcupacaoQuarto;
 import br.pucgoias.ads.hotel.excecao.PeriodoInvalidoException;
 import br.pucgoias.ads.hotel.excecao.QuartoIndisponivelException;
 import br.pucgoias.ads.hotel.servico.ReservaService;
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,9 +20,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,6 +40,9 @@ class ReservaServiceTest {
 
     @Autowired
     private TestEntityManager em;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
 
     private Hospede ana;
     private Hospede bruno;
@@ -98,11 +108,85 @@ class ReservaServiceTest {
     }
 
     // ---------------------------------------------------------------
-    // Casos 6 a 9: TODO (Etapa 5) - escritos pelo aluno
-    //   6. R4 - cancelamento persistido por dirty checking
-    //          (utilizar em.flush() e em.clear() antes de recarregar)
-    //   7. R5 - listagem paginada e ordenada por check-in decrescente
-    //   8. R6 - relatorio de ocupacao por projecao, apenas reservas ativas
-    //   9. R7 - uma unica instrucao SQL (utilizar org.hibernate.stat.Statistics)
+    // Casos 6 a 9: escritos pelo aluno (Etapa 5)
     // ---------------------------------------------------------------
+
+    @Test
+    @DisplayName("6. R4 - cancelamento persistido por dirty checking")
+    void cancelamentoPersistidoSemSave() {
+        Reserva reserva = service.reservar(ana.getId(), standard.getId(), DIA_1, DIA_1.plusDays(3));
+        Long id = reserva.getId();
+        em.flush();
+        em.clear();
+
+        service.cancelar(id);
+        em.flush();
+        em.clear();
+
+        Reserva recarregada = em.find(Reserva.class, id);
+        assertThat(recarregada.getStatus()).isEqualTo(StatusReserva.CANCELADA);
+    }
+
+    @Test
+    @DisplayName("7. R5 - listagem paginada e ordenada por check-in decrescente")
+    void listagemPaginadaOrdenada() {
+        service.reservar(ana.getId(), standard.getId(), DIA_1, DIA_1.plusDays(2));
+        service.reservar(ana.getId(), standard.getId(), DIA_1.plusDays(10), DIA_1.plusDays(12));
+        service.reservar(ana.getId(), standard.getId(), DIA_1.plusDays(20), DIA_1.plusDays(22));
+        service.reservar(bruno.getId(), suite.getId(), DIA_1, DIA_1.plusDays(2));
+
+        Page<Reserva> pagina = service.listarPorHospede(ana.getId(), 0, 2);
+
+        assertThat(pagina.getTotalElements()).isEqualTo(3);
+        assertThat(pagina.getTotalPages()).isEqualTo(2);
+        assertThat(pagina.getContent())
+                .extracting(r -> r.getPeriodo().getCheckIn())
+                .containsExactly(DIA_1.plusDays(20), DIA_1.plusDays(10));
+    }
+
+    @Test
+    @DisplayName("8. R6 - relatorio de ocupacao por projecao, apenas reservas ativas")
+    void relatorioOcupacaoApenasAtivas() {
+        service.reservar(ana.getId(), standard.getId(), DIA_1, DIA_1.plusDays(3));
+        Reserva cancelada = service.reservar(bruno.getId(), standard.getId(), DIA_1.plusDays(10), DIA_1.plusDays(12));
+        service.reservar(ana.getId(), suite.getId(), DIA_1, DIA_1.plusDays(2));
+        service.cancelar(cancelada.getId());
+        em.flush();
+
+        List<OcupacaoQuarto> relatorio = service.relatorioOcupacao();
+
+        assertThat(relatorio).hasSize(2);
+
+        OcupacaoQuarto linhaStandard = relatorio.get(0);
+        assertThat(linhaStandard.numeroQuarto()).isEqualTo("101");
+        assertThat(linhaStandard.quantidadeReservas()).isEqualTo(1L);
+        assertThat(linhaStandard.receita()).isEqualByComparingTo("600.00");
+
+        OcupacaoQuarto linhaSuite = relatorio.get(1);
+        assertThat(linhaSuite.numeroQuarto()).isEqualTo("501");
+        assertThat(linhaSuite.quantidadeReservas()).isEqualTo(1L);
+        assertThat(linhaSuite.receita()).isEqualByComparingTo("1150.00");
+    }
+
+    @Test
+    @DisplayName("9. R7 - listagem de ativas em uma unica instrucao SQL")
+    void listagemAtivasEmUmaInstrucao() {
+        service.reservar(ana.getId(), standard.getId(), DIA_1, DIA_1.plusDays(2));
+        service.reservar(bruno.getId(), standard.getId(), DIA_1.plusDays(5), DIA_1.plusDays(7));
+        service.reservar(ana.getId(), suite.getId(), DIA_1, DIA_1.plusDays(2));
+        em.flush();
+        em.clear();
+
+        Statistics estatisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        estatisticas.clear();
+
+        List<Reserva> ativas = service.listarAtivasComDetalhes();
+        for (Reserva reserva : ativas) {
+            reserva.getHospede().getNome();
+            reserva.getQuarto().getNumero();
+        }
+
+        assertThat(ativas).hasSize(3);
+        assertThat(estatisticas.getPrepareStatementCount()).isEqualTo(1);
+    }
 }
